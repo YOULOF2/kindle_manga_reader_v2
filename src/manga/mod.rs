@@ -5,7 +5,7 @@ mod common;
 use self::common::get_json;
 use self::manga_structs::{MangaChapter, MangaSeries, MangaVolume};
 
-// Should return Result<MangaData::MangaSeries, Box<dyn std::error::Error>>
+/// Get the manga by id and return a `MangaSeries`
 pub fn get_by_id(manga_id: &str) -> MangaSeries {
     let manga_details_data = get_json(format!("https://api.mangadex.org/manga/{}", manga_id));
 
@@ -35,13 +35,6 @@ pub fn get_by_id(manga_id: &str) -> MangaSeries {
     {
         for relationship_data in internal_relationship.iter() {
             if relationship_data["type"].eq("cover_art") {
-                println!(
-                    "{}",
-                    format!(
-                        "https://api.mangadex.org/cover/{}",
-                        relationship_data["id"].to_string().replace("\"", "")
-                    )
-                );
                 let manga_cover_data = get_json(format!(
                     "https://api.mangadex.org/cover/{}",
                     relationship_data["id"].to_string().replace("\"", "")
@@ -49,7 +42,7 @@ pub fn get_by_id(manga_id: &str) -> MangaSeries {
 
                 manga_cover_url = format!(
                     "https://uploads.mangadex.org/covers/{}/{}",
-                    manga_cover_data["data"]["id"].to_string(),
+                    &manga_id,
                     manga_cover_data["data"]["attributes"]["fileName"].to_string()
                 )
                 .replace("\"", "");
@@ -79,7 +72,7 @@ pub fn get_by_id(manga_id: &str) -> MangaSeries {
         let mut chapter_titles: Vec<f32> = Vec::new();
 
         for (chapter_title, _) in volume_data["chapters"].as_object().unwrap() {
-            chapter_titles.push(chapter_title.parse().unwrap());
+            chapter_titles.push(chapter_title.parse().unwrap_or(1.0));
         }
 
         chapter_titles.sort_by(|a, b| a.partial_cmp(b).unwrap());

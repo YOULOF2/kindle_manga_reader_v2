@@ -1,12 +1,10 @@
-use crate::{
-    manga::get_json,
-    manga::make_mobi,
-};
+use crate::{manga::get_json, manga::make_mobi};
 use std::fs;
 use std::fs::File;
 use std::path::PathBuf;
 
 // ─── Mangaseries ─────────────────────────────────────────────────────────────
+
 #[derive(Debug)]
 pub struct MangaSeries {
     pub id: String,
@@ -21,6 +19,7 @@ pub struct MangaSeries {
 }
 
 // ─── Mangavolume ─────────────────────────────────────────────────────────────
+
 #[derive(Debug)]
 pub struct MangaVolume {
     pub title: String,
@@ -43,8 +42,8 @@ impl MangaVolume {
 
     fn dowload_cover(&self) -> PathBuf {
         let cover_file_name = self.cover_url.split("/").last().unwrap();
+
         let file_path = PathBuf::from(format!("temp\\{}", cover_file_name));
-        println!("Writing image to {:?}", file_path);
 
         let mut file = File::create(&file_path).unwrap();
 
@@ -59,7 +58,14 @@ impl MangaVolume {
     }
 
     pub fn to_mobi(&self) -> Outputfile {
+        //! 1. Downloads the volume images
+        //! 2. Adds the end of volume image
+        //! 3. Converts it to mobi
+        //!
+        //! Returns `Outputfile` with `path` (mobi path) and `size` (mobi file size)
+
         let mut images = self.download_images();
+
         images.push(PathBuf::from("assets\\endofthisvolume.png"));
 
         let mobi_file = make_mobi::make_volume(
@@ -79,6 +85,7 @@ impl MangaVolume {
 }
 
 // ─── Mangachapter ────────────────────────────────────────────────────────────
+
 #[derive(Debug)]
 pub struct MangaChapter {
     pub id: String,
@@ -108,7 +115,6 @@ impl MangaChapter {
                 let url = format!("{}/data/{}/{}", base_url, chapter_hash, file_name);
 
                 let file_path = PathBuf::from(format!("temp\\{}", file_name));
-                println!("Writing image to {:?}", file_path);
 
                 let mut file = File::create(&file_path).unwrap();
 
@@ -126,7 +132,14 @@ impl MangaChapter {
     }
 
     pub fn to_mobi(&self) -> Outputfile {
+        //! 1. Downloads the chapter images
+        //! 2. Adds the end of chapter image
+        //! 3. Converts it to mobi
+        //!
+        //! Returns `Outputfile` with `path` (mobi path) and `size` (mobi file size)
+
         let mut images = self.download_images();
+
         images.push(PathBuf::from("assets\\endofthischapter.png"));
 
         let mobi_file = make_mobi::make_chapter(
@@ -149,7 +162,10 @@ impl MangaChapter {
 // ─── Outputfile ──────────────────────────────────────────────────────────────
 
 pub struct Outputfile {
+    /// file path
     pub path: PathBuf,
+
+    /// file size
     pub size: u64,
 }
 
@@ -158,22 +174,14 @@ pub struct Outputfile {
 // Resize image to have A4 page size
 use image::{imageops::FilterType, io::Reader as ImageReader};
 pub fn resize_image_to_a4(image_path: &PathBuf) -> () {
-    println!("Starting to resize image");
-    println!("{:#?}", ImageReader::open(image_path).unwrap().format());
-
-    // !! `first two bytes are not an SOI marker` error appears from this line
-    // !! Fix this?
     let opened_image = ImageReader::open(image_path).unwrap().decode().unwrap();
 
     let hszize =
-        (
-            (opened_image.height() as f64) * (2480.0 / (opened_image.width() as f64))
-        ).round() as u32;
+        ((opened_image.height() as f64) * (2480.0 / (opened_image.width() as f64))).round() as u32;
 
     let resized_image = opened_image.resize(2480, hszize, FilterType::Lanczos3);
 
     resized_image.save(image_path).unwrap();
-    println!("Finished resizing image");
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────

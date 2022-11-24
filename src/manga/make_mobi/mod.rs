@@ -11,9 +11,7 @@ use serde_json::json;
 
 mod epub_to_mobi;
 
-/* -------------------------------------------------------------------------- */
-/*                                  Functions                                 */
-/* -------------------------------------------------------------------------- */
+// ─── Functions ───────────────────────────────────────────────────────────────
 
 pub fn get_extension_from_filename(filename: &PathBuf) -> Option<&str> {
     Path::new(filename).extension().and_then(OsStr::to_str)
@@ -23,13 +21,12 @@ fn read_as_bytes(file: &PathBuf) -> Vec<u8> {
     fs::read(file).unwrap()
 }
 
-fn render_template(html_path: &str, data: serde_json::Value) -> String {
-    let cover_string = fs::read_to_string(html_path).unwrap();
+fn render_template(html_data: &str, data: serde_json::Value) -> String {
     let reg = Handlebars::new();
-    reg.render_template(&cover_string, &data).unwrap()
+    reg.render_template(&html_data, &data).unwrap()
 }
 
-/* ----------------------------------- --- ---------------------------------- */
+// ─── Make Epub ───────────────────────────────────────────────────────────────
 
 // make chapter as epub
 fn make_epub(
@@ -76,7 +73,7 @@ fn make_epub(
 
     // render the fields in cover.html
     let binding = render_template(
-        include_str!(".\\templates\\cover.html"),
+        include_str!(".\\mobi_templates\\cover.html"),
         json!({"width": im_width, "height": im_height, "cover_path": format!("image-0.{}", file_extension)}),
     );
 
@@ -118,7 +115,7 @@ fn make_epub(
 
         // render template html to string
         let binding = render_template(
-            include_str!("templates\\page.html"),
+            include_str!(".\\mobi_templates\\page.html"),
             json!({"width": im_width, "height": im_height, "image": format!("image-{}.{}",index + 1, file_extension)}),
         );
 
@@ -144,8 +141,6 @@ fn make_epub(
 
     let file = fs::File::create(&epub_file_path).unwrap();
     epub.generate(file).unwrap();
-
-    ()
 }
 
 // ─── Public Methods ──────────────────────────────────────────────────────────
@@ -163,18 +158,31 @@ pub fn make_chapter(
     );
 
     let epub_file_path = format!("temp\\{}.epub", &ebook_title);
+
     make_epub(images, &epub_file_path, &author, &ebook_title);
+
+    // Remove all images
+    for file in images.iter() {
+        if !file.file_name().unwrap().eq("endofthisvolume.png") && !file.file_name().unwrap().eq("endofthischapter.png") {
+            fs::remove_file(file).unwrap();
+        }
+    }
 
     let mobi_file_name = format!(
         "{} volume {} chapter {}.mobi",
         manga_title, volume_title, chapter_title
     );
-    let status = epub_to_mobi::convert(&epub_file_path, &mobi_file_name);
-    println!("process finished with: {status}");
 
-    let mobi_file_path = format!("temp\\{}", mobi_file_name);
+    epub_to_mobi::convert(&epub_file_path, &mobi_file_name);
 
-    PathBuf::from(mobi_file_path)
+    let mobi_file_path = PathBuf::from(format!("temp\\{}", &mobi_file_name));
+
+    assert!(&mobi_file_path.is_file(), "mobi has not been created");
+
+    // Remove epub
+    fs::remove_file(epub_file_path).unwrap();
+
+    mobi_file_path
 }
 
 pub fn make_volume(
@@ -185,15 +193,25 @@ pub fn make_volume(
 ) -> PathBuf {
     let ebook_title = format!("{} volume {}", manga_title, volume_title);
 
-    let epub_file_name = format!("temp\\{}.epub", &ebook_title);
+    let epub_file_path = format!("temp\\{}.epub", &ebook_title);
 
-    make_epub(images, &epub_file_name, &author, &ebook_title);
+    make_epub(images, &epub_file_path, &author, &ebook_title);
+
+    // Remove all images
+    for file in images.iter() {
+        fs::remove_file(file).unwrap();
+    }
 
     let mobi_file_name = format!("{}.mobi", ebook_title);
 
-    let status = epub_to_mobi::convert(&epub_file_name, &mobi_file_name);
+    epub_to_mobi::convert(&epub_file_path, &mobi_file_name);
 
-    println!("process finished with: {status}");
+    // Remove epub
+    fs::remove_file(epub_file_path).unwrap();
 
-    PathBuf::from(mobi_file_name)
+    let mobi_file_path = PathBuf::from(format!("temp\\{}", mobi_file_name));
+
+    assert!(&mobi_file_path.is_file(), "mobi has not been created");
+
+    mobi_file_path
 }
