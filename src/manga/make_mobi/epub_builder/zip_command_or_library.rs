@@ -4,9 +4,9 @@
 
 use eyre::Result;
 
-use crate::make_mobi::epub_builder::zip::Zip;
-use crate::make_mobi::epub_builder::ZipCommand;
-use crate::make_mobi::epub_builder::ZipLibrary;
+use crate::manga::make_mobi::epub_builder::zip::Zip;
+use crate::manga::make_mobi::epub_builder::ZipCommand;
+use crate::manga::make_mobi::epub_builder::ZipLibrary;
 
 use std::io::Read;
 use std::io::Write;

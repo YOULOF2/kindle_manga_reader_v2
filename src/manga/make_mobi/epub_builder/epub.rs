@@ -2,11 +2,11 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with
 // this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use crate::make_mobi::epub_builder::templates;
-use crate::make_mobi::epub_builder::toc::{Toc, TocElement};
-use crate::make_mobi::epub_builder::zip::Zip;
-use crate::make_mobi::epub_builder::ReferenceType;
-use crate::make_mobi::epub_builder::{common, EpubContent};
+use crate::manga::make_mobi::epub_builder::templates;
+use crate::manga::make_mobi::epub_builder::toc::{Toc, TocElement};
+use crate::manga::make_mobi::epub_builder::zip::Zip;
+use crate::manga::make_mobi::epub_builder::ReferenceType;
+use crate::manga::make_mobi::epub_builder::{common, EpubContent};
 
 use std::io;
 use std::io::Read;
@@ -433,7 +433,7 @@ impl<Z: Zip> EpubBuilder<Z> {
                 itemrefs.push(format!("<itemref idref=\"{id}\"/>", id = id));
             }
             if let Some(reftype) = content.reftype {
-                use crate::make_mobi::epub_builder::ReferenceType::*;
+                use crate::manga::make_mobi::epub_builder::ReferenceType::*;
                 let reftype = match reftype {
                     Cover => "cover",
                     TitlePage => "title-page",

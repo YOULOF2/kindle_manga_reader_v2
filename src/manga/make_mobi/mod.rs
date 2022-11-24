@@ -1,19 +1,21 @@
-use std::path::PathBuf;
 use std::ffi::OsStr;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 mod epub_builder;
 
 use epub_builder::{EpubBuilder, EpubContent, ReferenceType, ZipLibrary};
 use handlebars::Handlebars;
 use image::GenericImageView;
-use natord;
 use serde_json::json;
 
 mod epub_to_mobi;
 
-fn get_extension_from_filename(filename: &PathBuf) -> Option<&str> {
+/* -------------------------------------------------------------------------- */
+/*                                  Functions                                 */
+/* -------------------------------------------------------------------------- */
+
+pub fn get_extension_from_filename(filename: &PathBuf) -> Option<&str> {
     Path::new(filename).extension().and_then(OsStr::to_str)
 }
 
@@ -27,6 +29,8 @@ fn render_template(html_path: &str, data: serde_json::Value) -> String {
     reg.render_template(&cover_string, &data).unwrap()
 }
 
+/* ----------------------------------- --- ---------------------------------- */
+
 // make chapter as epub
 fn make_epub(
     images: &Vec<PathBuf>,
@@ -36,8 +40,8 @@ fn make_epub(
 ) -> () {
     let css = r#"@charset "utf-8";a {text-decoration: none;}#toc ol {list-style-type: none;}img {display: block;width: 100%;object-fit: contain;}"#;
 
-    let mut all_images = images.to_owned();
-    all_images.sort_by(|a, b| natord::compare(a.to_str().unwrap(), b.to_str().unwrap()));
+    let all_images = images.to_owned();
+    // all_images.sort_by(|a, b| natord::compare(a.to_str().unwrap(), b.to_str().unwrap()));
 
     let mut epub = EpubBuilder::new(ZipLibrary::new().unwrap()).unwrap();
 
@@ -64,14 +68,15 @@ fn make_epub(
         format!("image-0.{}", file_extension),
         cover_as_bytes,
         format!("image/{}", file_extension),
-    ).unwrap();
+    )
+    .unwrap();
 
     // opens and gets dimensions of cover image
     let (im_width, im_height) = image::open(cover_image).unwrap().dimensions();
 
     // render the fields in cover.html
     let binding = render_template(
-        "templates\\cover.html",
+        include_str!(".\\templates\\cover.html"),
         json!({"width": im_width, "height": im_height, "cover_path": format!("image-0.{}", file_extension)}),
     );
 
@@ -84,7 +89,8 @@ fn make_epub(
             .title("Cover")
             .reftype(ReferenceType::Cover)
             .reftype(ReferenceType::Text),
-    ).unwrap();
+    )
+    .unwrap();
 
     // ─── Add Images To Epub ──────────────────────────────────────────────
 
@@ -112,7 +118,7 @@ fn make_epub(
 
         // render template html to string
         let binding = render_template(
-            "templates\\page.html",
+            include_str!("templates\\page.html"),
             json!({"width": im_width, "height": im_height, "image": format!("image-{}.{}",index + 1, file_extension)}),
         );
 
@@ -156,20 +162,19 @@ pub fn make_chapter(
         manga_title, volume_title, chapter_title
     );
 
-    let epub_file_name = format!(
-        "temp\\{}.epub",
-        &ebook_title
-    );
-    make_epub(images, &epub_file_name, &author, &ebook_title);
+    let epub_file_path = format!("temp\\{}.epub", &ebook_title);
+    make_epub(images, &epub_file_path, &author, &ebook_title);
 
     let mobi_file_name = format!(
         "{} volume {} chapter {}.mobi",
         manga_title, volume_title, chapter_title
     );
-    let status = epub_to_mobi::convert(&epub_file_name, &mobi_file_name);
+    let status = epub_to_mobi::convert(&epub_file_path, &mobi_file_name);
     println!("process finished with: {status}");
 
-    PathBuf::from(mobi_file_name)
+    let mobi_file_path = format!("temp\\{}", mobi_file_name);
+
+    PathBuf::from(mobi_file_path)
 }
 
 pub fn make_volume(
@@ -178,22 +183,13 @@ pub fn make_volume(
     volume_title: &String,
     author: &String,
 ) -> PathBuf {
-    let ebook_title = format!(
-        "{} volume {}",
-        manga_title, volume_title
-    );
+    let ebook_title = format!("{} volume {}", manga_title, volume_title);
 
-    let epub_file_name = format!(
-        "temp\\{}.epub",
-        &ebook_title
-    );
+    let epub_file_name = format!("temp\\{}.epub", &ebook_title);
 
     make_epub(images, &epub_file_name, &author, &ebook_title);
 
-    let mobi_file_name = format!(
-        "{}.mobi",
-        ebook_title
-    );
+    let mobi_file_name = format!("{}.mobi", ebook_title);
 
     let status = epub_to_mobi::convert(&epub_file_name, &mobi_file_name);
 

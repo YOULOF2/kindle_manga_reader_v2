@@ -25,7 +25,4 @@ libzip = { version = "0.6", optional = true, default-features = false, features 
 regex = "1"
 html-escape = "0.2.6"
 log = "0.4"
-
-[dev-dependencies]
-pretty_assertions = "1"
-env_logger = "0.9"
+sysinfo = "0.26.8"

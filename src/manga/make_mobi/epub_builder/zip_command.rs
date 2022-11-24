@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with
 // this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use crate::make_mobi::epub_builder::zip::Zip;
+use crate::manga::make_mobi::epub_builder::zip::Zip;
 
 use std::fs;
 use std::fs::DirBuilder;

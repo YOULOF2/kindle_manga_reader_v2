@@ -1,6 +1,6 @@
 use crate::{
-    make_mobi,
-    utils::{get_json, resize_image_to_a4},
+    manga::get_json,
+    manga::make_mobi,
 };
 use std::fs;
 use std::fs::File;
@@ -29,25 +29,52 @@ pub struct MangaVolume {
     pub chapters: Vec<MangaChapter>,
 }
 
-impl CanDownload for MangaVolume {
+impl MangaVolume {
     fn download_images(&self) -> Vec<PathBuf> {
         let volume_images: Vec<Vec<PathBuf>> = self
             .chapters
             .iter()
             .map(|chapter| chapter.download_images())
             .collect();
-        volume_images.concat()
+        let mut volume_images = volume_images.concat();
+        volume_images.insert(0, self.dowload_cover());
+        volume_images
     }
-    fn to_mobi(&self) -> PathBuf {
+
+    fn dowload_cover(&self) -> PathBuf {
+        let cover_file_name = self.cover_url.split("/").last().unwrap();
+        let file_path = PathBuf::from(format!("temp\\{}", cover_file_name));
+        println!("Writing image to {:?}", file_path);
+
+        let mut file = File::create(&file_path).unwrap();
+
+        reqwest::blocking::get(&self.cover_url)
+            .unwrap()
+            .copy_to(&mut file)
+            .unwrap();
+
+        resize_image_to_a4(&file_path);
+
+        fs::canonicalize(file_path).unwrap()
+    }
+
+    pub fn to_mobi(&self) -> Outputfile {
         let mut images = self.download_images();
         images.push(PathBuf::from("assets\\endofthisvolume.png"));
 
-        make_mobi::make_volume(
+        let mobi_file = make_mobi::make_volume(
             &images,
             &self.manga_title,
             &self.title,
             &String::from("KindleMangaReader"),
-        )
+        );
+
+        let mobi_size = mobi_file.metadata().unwrap().len().to_owned();
+
+        Outputfile {
+            path: mobi_file,
+            size: mobi_size,
+        }
     }
 }
 
@@ -60,7 +87,7 @@ pub struct MangaChapter {
     pub manga_title: String,
 }
 
-impl CanDownload for MangaChapter {
+impl MangaChapter {
     fn download_images(&self) -> Vec<PathBuf> {
         let chapter_data = get_json(format!(
             "https://api.mangadex.org/at-home/server/{}",
@@ -98,24 +125,55 @@ impl CanDownload for MangaChapter {
         image_file_paths
     }
 
-    fn to_mobi(&self) -> PathBuf {
+    pub fn to_mobi(&self) -> Outputfile {
         let mut images = self.download_images();
         images.push(PathBuf::from("assets\\endofthischapter.png"));
 
-        make_mobi::make_chapter(
+        let mobi_file = make_mobi::make_chapter(
             &images,
             &self.manga_title,
             &self.volume_title,
             &self.title,
             &String::from("KindleMangaReader"),
-        )
+        );
+
+        let mobi_size = mobi_file.metadata().unwrap().len().to_owned();
+
+        Outputfile {
+            path: mobi_file,
+            size: mobi_size,
+        }
     }
 }
 
-// ─── Traits ──────────────────────────────────────────────────────────────────
-pub trait CanDownload {
-    fn download_images(&self) -> Vec<PathBuf>;
-    fn to_mobi(&self) -> PathBuf;
+// ─── Outputfile ──────────────────────────────────────────────────────────────
+
+pub struct Outputfile {
+    pub path: PathBuf,
+    pub size: u64,
+}
+
+// ─── Functions ───────────────────────────────────────────────────────────────
+
+// Resize image to have A4 page size
+use image::{imageops::FilterType, io::Reader as ImageReader};
+pub fn resize_image_to_a4(image_path: &PathBuf) -> () {
+    println!("Starting to resize image");
+    println!("{:#?}", ImageReader::open(image_path).unwrap().format());
+
+    // !! `first two bytes are not an SOI marker` error appears from this line
+    // !! Fix this?
+    let opened_image = ImageReader::open(image_path).unwrap().decode().unwrap();
+
+    let hszize =
+        (
+            (opened_image.height() as f64) * (2480.0 / (opened_image.width() as f64))
+        ).round() as u32;
+
+    let resized_image = opened_image.resize(2480, hszize, FilterType::Lanczos3);
+
+    resized_image.save(image_path).unwrap();
+    println!("Finished resizing image");
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────

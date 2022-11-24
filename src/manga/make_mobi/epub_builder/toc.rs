@@ -1,7 +1,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with
 // this file, You can obtain one at https://mozilla.org/MPL/2.0/.
-use crate::make_mobi::epub_builder::common;
+use crate::manga::make_mobi::epub_builder::common;
 
 /// An element of the [Table of contents](struct.Toc.html)
 ///

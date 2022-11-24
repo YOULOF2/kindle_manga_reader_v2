@@ -1,10 +1,9 @@
 mod manga_structs;
+mod make_mobi;
+mod common;
 
-use crate::utils::get_json;
-
+use self::common::get_json;
 use self::manga_structs::{MangaChapter, MangaSeries, MangaVolume};
-
-pub use self::manga_structs::CanDownload;
 
 // Should return Result<MangaData::MangaSeries, Box<dyn std::error::Error>>
 pub fn get_by_id(manga_id: &str) -> MangaSeries {
