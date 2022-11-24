@@ -2,6 +2,7 @@ use crate::{manga::get_json, manga::make_mobi};
 use std::fs;
 use std::fs::File;
 use std::path::PathBuf;
+use std::thread;
 
 // ─── Mangaseries ─────────────────────────────────────────────────────────────
 
@@ -123,11 +124,24 @@ impl MangaChapter {
                     .copy_to(&mut file)
                     .unwrap();
 
-                resize_image_to_a4(&file_path);
-
                 fs::canonicalize(file_path).unwrap()
             })
             .collect();
+
+        let mut children = vec![];
+        for image in image_file_paths.clone() {
+            children.push(
+                thread::spawn(move || {
+                    resize_image_to_a4(&image)
+                })
+            )
+        }
+
+        for child in children {
+            // Wait for the thread to finish. Returns a result.
+            let _ = child.join();
+        }
+
         image_file_paths
     }
 
