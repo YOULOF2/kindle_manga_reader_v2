@@ -270,27 +270,3 @@ pub fn resize_image_to_a4(image_path: &PathBuf) -> () {
     let elapsed = now.elapsed();
     println!("time to resize image is: {:.2?}", elapsed.as_secs());
 }
-
-// ─── Tests ───────────────────────────────────────────────────────────────────
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-    use std::path::Path;
-    #[test]
-    fn chapter_download_images() {
-        let chapter = MangaChapter {
-            id: String::from("eadf3eba-1023-4db5-86e4-158be4a1e78e"),
-            title: String::new(),
-            manga_title: String::new(),
-            volume_title: String::new(),
-        };
-        let all_image_paths = chapter.download_images();
-
-        for path in all_image_paths {
-            assert!(Path::new(&path).exists());
-            fs::remove_file(path).unwrap();
-        }
-    }
-}
