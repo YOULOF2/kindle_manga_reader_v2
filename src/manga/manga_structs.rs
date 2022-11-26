@@ -1,4 +1,5 @@
-use crate::{manga::get_json, manga::make_mobi};
+use crate::manga::common::{get_json, Outputfile};
+use crate::manga::make_mobi;
 use std::fs;
 use std::fs::File;
 use std::path::PathBuf;
@@ -36,13 +37,17 @@ impl MangaVolume {
             .iter()
             .map(|chapter| chapter.download_images())
             .collect();
+
         let mut volume_images = volume_images.concat();
-        volume_images.insert(0, self.dowload_cover());
+
+        volume_images.insert(0, self.download_cover());
+
         volume_images
     }
 
-    fn dowload_cover(&self) -> PathBuf {
+    fn download_cover(&self) -> PathBuf {
         let cover_file_name = self.cover_url.split("/").last().unwrap();
+        println!("{:?}", cover_file_name);
 
         let file_path = PathBuf::from(format!("temp\\{}", cover_file_name));
 
@@ -55,7 +60,7 @@ impl MangaVolume {
 
         resize_image_to_a4(&file_path);
 
-        fs::canonicalize(file_path).unwrap()
+        fs::canonicalize(&file_path).unwrap()
     }
 
     pub fn to_mobi(&self) -> Outputfile {
@@ -63,11 +68,12 @@ impl MangaVolume {
         //! 2. Adds the end of volume image
         //! 3. Converts it to mobi
         //!
-        //! Returns `Outputfile` with `path` (mobi path) and `size` (mobi file size)
+        //! Returns `Outputfile` with `path` (mobi path) and `size` (mobi file size),
+        //!  `manga_title` (manga title), `volume_title` (volume title) and `chapter_title` as None
 
         let mut images = self.download_images();
 
-        images.push(PathBuf::from("assets\\endofthisvolume.png"));
+        images.push(fs::canonicalize(PathBuf::from("assets\\endofthisvolume.png")).unwrap());
 
         let mobi_file = make_mobi::make_volume(
             &images,
@@ -76,10 +82,16 @@ impl MangaVolume {
             &String::from("KindleMangaReader"),
         );
 
+        println!("{:?}", mobi_file);
+
         let mobi_size = mobi_file.metadata().unwrap().len().to_owned();
 
         Outputfile {
-            path: mobi_file,
+            content_type: String::from("volume"),
+            manga_title: self.manga_title.clone(),
+            volume_title: self.title.clone(),
+            chapter_title: None,
+            path: fs::canonicalize(mobi_file).unwrap(),
             size: mobi_size,
         }
     }
@@ -102,18 +114,31 @@ impl MangaChapter {
             self.id
         ));
 
-        let base_url = chapter_data["baseUrl"].as_str().unwrap();
-        let chapter_hash = chapter_data["chapter"]["hash"].as_str().unwrap();
+        let base_url = chapter_data["baseUrl"].as_str().unwrap().to_owned();
+        let chapter_hash = chapter_data["chapter"]["hash"].as_str().unwrap().to_owned();
 
-        // Convert chapter data to request urls
-        let image_file_paths: Vec<PathBuf> = chapter_data["chapter"]["data"]
+        // vector of all join handles
+        let mut join_handles = vec![];
+
+        for image in chapter_data["chapter"]["dataSaver"]
             .as_array()
             .unwrap()
-            .iter()
-            .map(|wraped_file_name| {
-                let file_name = wraped_file_name.as_str().unwrap();
+            .to_owned()
+        {
+            // 👇 to stop the borrow checker from complaining
+            let local_base_url = base_url.clone();
+            let local_chapter_hash = chapter_hash.clone();
 
-                let url = format!("{}/data/{}/{}", base_url, chapter_hash, file_name);
+            // Spawns a new thread with a closure that, creates the image urls
+            // and then downloads the images,
+            // and then resizes them to a4
+            let join_handle = thread::spawn(move || {
+                let file_name = image.as_str().unwrap();
+
+                let url = format!(
+                    "{}/data-saver/{}/{}",
+                    local_base_url, local_chapter_hash, file_name
+                );
 
                 let file_path = PathBuf::from(format!("temp\\{}", file_name));
 
@@ -124,23 +149,22 @@ impl MangaChapter {
                     .copy_to(&mut file)
                     .unwrap();
 
-                fs::canonicalize(file_path).unwrap()
-            })
+                let cannon_file_path = fs::canonicalize(file_path).unwrap();
+
+                resize_image_to_a4(&cannon_file_path);
+
+                cannon_file_path
+            });
+
+            join_handles.push(join_handle);
+            // image_file_paths.push((image, base_url, chapter_hash))
+        }
+
+        // join the threads and get the image file path as the output
+        let image_file_paths: Vec<PathBuf> = join_handles
+            .into_iter()
+            .map(|handler| handler.join().unwrap())
             .collect();
-
-        let mut children = vec![];
-        for image in image_file_paths.clone() {
-            children.push(
-                thread::spawn(move || {
-                    resize_image_to_a4(&image)
-                })
-            )
-        }
-
-        for child in children {
-            // Wait for the thread to finish. Returns a result.
-            let _ = child.join();
-        }
 
         image_file_paths
     }
@@ -150,11 +174,12 @@ impl MangaChapter {
         //! 2. Adds the end of chapter image
         //! 3. Converts it to mobi
         //!
-        //! Returns `Outputfile` with `path` (mobi path) and `size` (mobi file size)
+        //! Returns `Outputfile` with `path` (mobi path) and `size` (mobi file size),
+        //!  `manga_title` (manga title), `volume_title` (volume title) and `chapter_title` (chapter title)
 
         let mut images = self.download_images();
 
-        images.push(PathBuf::from("assets\\endofthischapter.png"));
+        images.push(fs::canonicalize(PathBuf::from("assets\\endofthischapter.png")).unwrap());
 
         let mobi_file = make_mobi::make_chapter(
             &images,
@@ -167,38 +192,87 @@ impl MangaChapter {
         let mobi_size = mobi_file.metadata().unwrap().len().to_owned();
 
         Outputfile {
-            path: mobi_file,
+            content_type: String::from("chapter"),
+            manga_title: self.manga_title.clone(),
+            volume_title: self.volume_title.clone(),
+            chapter_title: Some(self.title.clone()),
+            path: fs::canonicalize(mobi_file).unwrap(),
             size: mobi_size,
         }
     }
 }
 
-// ─── Outputfile ──────────────────────────────────────────────────────────────
-
-pub struct Outputfile {
-    /// file path
-    pub path: PathBuf,
-
-    /// file size
-    pub size: u64,
-}
-
 // ─── Functions ───────────────────────────────────────────────────────────────
 
 // Resize image to have A4 page size
-use image::{imageops::FilterType, io::Reader as ImageReader};
+use std::io::BufWriter;
+use std::num::NonZeroU32;
+
+use fast_image_resize as fr;
+use image::codecs::png::PngEncoder;
+use image::{io::Reader as ImageReader, ColorType, ImageEncoder};
+
+use std::time::Instant;
+
 pub fn resize_image_to_a4(image_path: &PathBuf) -> () {
+    let now = Instant::now();
     let opened_image = ImageReader::open(image_path).unwrap().decode().unwrap();
 
+    let width = NonZeroU32::new(opened_image.width()).unwrap();
+    let height = NonZeroU32::new(opened_image.height()).unwrap();
+
+    let mut src_image = fr::Image::from_vec_u8(
+        width,
+        height,
+        opened_image.to_rgba8().into_raw(),
+        fr::PixelType::U8x4,
+    )
+    .unwrap();
+
+    // Multiple RGB channels of source image by alpha channel
+    // (not required for the Nearest algorithm)
+    let alpha_mul_div = fr::MulDiv::default();
+    alpha_mul_div
+        .multiply_alpha_inplace(&mut src_image.view_mut())
+        .unwrap();
+
+    // height of the destination image
     let hszize =
         ((opened_image.height() as f64) * (2480.0 / (opened_image.width() as f64))).round() as u32;
 
-    let resized_image = opened_image.resize(2480, hszize, FilterType::Lanczos3);
+    // Create container for data of destination image
+    let dst_width = NonZeroU32::new(2480).unwrap();
+    let dst_height = NonZeroU32::new(hszize).unwrap();
+    let mut dst_image = fr::Image::new(dst_width, dst_height, src_image.pixel_type());
 
-    resized_image.save(image_path).unwrap();
+    // Get mutable view of destination image data
+    let mut dst_view = dst_image.view_mut();
+
+    // Create Resizer instance and resize source image
+    // into buffer of destination image
+    let mut resizer = fr::Resizer::new(fr::ResizeAlg::Convolution(fr::FilterType::CatmullRom));
+    resizer.resize(&src_image.view(), &mut dst_view).unwrap();
+
+    // Divide RGB channels of destination image by alpha
+    alpha_mul_div.divide_alpha_inplace(&mut dst_view).unwrap();
+
+    // Write destination image as PNG-file
+    let mut result_buf = BufWriter::new(Vec::new());
+    PngEncoder::new(&mut result_buf)
+        .write_image(
+            dst_image.buffer(),
+            dst_width.get(),
+            dst_height.get(),
+            ColorType::Rgba8,
+        )
+        .unwrap();
+
+    let elapsed = now.elapsed();
+    println!("time to resize image is: {:.2?}", elapsed.as_secs());
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
+
 #[cfg(test)]
 mod tests {
     use super::*;

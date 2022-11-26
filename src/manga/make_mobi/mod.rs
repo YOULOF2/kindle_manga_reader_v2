@@ -2,14 +2,14 @@ use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+#[allow(dead_code)]
 mod epub_builder;
+mod epub_to_mobi;
 
 use epub_builder::{EpubBuilder, EpubContent, ReferenceType, ZipLibrary};
 use handlebars::Handlebars;
 use image::GenericImageView;
 use serde_json::json;
-
-mod epub_to_mobi;
 
 // ─── Functions ───────────────────────────────────────────────────────────────
 
@@ -31,7 +31,7 @@ fn render_template(html_data: &str, data: serde_json::Value) -> String {
 // make chapter as epub
 fn make_epub(
     images: &Vec<PathBuf>,
-    epub_file_path: &String,
+    epub_file_path: &PathBuf,
     author: &String,
     epub_title: &String,
 ) -> () {
@@ -73,7 +73,7 @@ fn make_epub(
 
     // render the fields in cover.html
     let binding = render_template(
-        include_str!(".\\mobi_templates\\cover.html"),
+        include_str!("./templates/cover.html"),
         json!({"width": im_width, "height": im_height, "cover_path": format!("image-0.{}", file_extension)}),
     );
 
@@ -115,7 +115,7 @@ fn make_epub(
 
         // render template html to string
         let binding = render_template(
-            include_str!(".\\mobi_templates\\page.html"),
+            include_str!("./templates/page.html"),
             json!({"width": im_width, "height": im_height, "image": format!("image-{}.{}",index + 1, file_extension)}),
         );
 
@@ -139,10 +139,37 @@ fn make_epub(
         }
     }
 
+    epub.inline_toc();
+
     let file = fs::File::create(&epub_file_path).unwrap();
     epub.generate(file).unwrap();
 }
 
+fn clean_up(images: &Vec<PathBuf>, epub_file_path: PathBuf) {
+    // Remove all images
+    for image in images.iter() {
+        if !image
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .eq("endofthisvolume.png")
+            && !image
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .eq("endofthischapter.png")
+        {
+            println!("removing image: {:?}", image);
+            fs::remove_file(image).unwrap();
+        }
+    }
+
+    // Remove epub
+    fs::remove_file(epub_file_path).unwrap();
+    println!("Removed epub");
+}
 // ─── Public Methods ──────────────────────────────────────────────────────────
 
 pub fn make_chapter(
@@ -152,21 +179,17 @@ pub fn make_chapter(
     chapter_title: &String,
     author: &String,
 ) -> PathBuf {
-    let ebook_title = format!(
+    let mut ebook_title = format!(
         "{} volume {} chapter {}",
         manga_title, volume_title, chapter_title
     );
 
-    let epub_file_path = format!("temp\\{}.epub", &ebook_title);
+    // Make epub path legal
+    ebook_title = ebook_title.replace(":", " ");
+
+    let epub_file_path = PathBuf::from(format!("temp\\{}.epub", &ebook_title));
 
     make_epub(images, &epub_file_path, &author, &ebook_title);
-
-    // Remove all images
-    for file in images.iter() {
-        if !file.file_name().unwrap().eq("endofthisvolume.png") && !file.file_name().unwrap().eq("endofthischapter.png") {
-            fs::remove_file(file).unwrap();
-        }
-    }
 
     let mobi_file_name = format!(
         "{} volume {} chapter {}.mobi",
@@ -177,10 +200,9 @@ pub fn make_chapter(
 
     let mobi_file_path = PathBuf::from(format!("temp\\{}", &mobi_file_name));
 
-    assert!(&mobi_file_path.is_file(), "mobi has not been created");
+    assert!(&mobi_file_path.is_file());
 
-    // Remove epub
-    fs::remove_file(epub_file_path).unwrap();
+    clean_up(images, epub_file_path);
 
     mobi_file_path
 }
@@ -191,27 +213,24 @@ pub fn make_volume(
     volume_title: &String,
     author: &String,
 ) -> PathBuf {
-    let ebook_title = format!("{} volume {}", manga_title, volume_title);
+    let mut ebook_title = format!("{} volume {}", manga_title, volume_title);
 
-    let epub_file_path = format!("temp\\{}.epub", &ebook_title);
+    // Make epub path legal
+    ebook_title = ebook_title.replace(":", " ");
+
+    let epub_file_path = PathBuf::from(format!("temp\\{}.epub", &ebook_title));
 
     make_epub(images, &epub_file_path, &author, &ebook_title);
-
-    // Remove all images
-    for file in images.iter() {
-        fs::remove_file(file).unwrap();
-    }
 
     let mobi_file_name = format!("{}.mobi", ebook_title);
 
     epub_to_mobi::convert(&epub_file_path, &mobi_file_name);
 
-    // Remove epub
-    fs::remove_file(epub_file_path).unwrap();
-
     let mobi_file_path = PathBuf::from(format!("temp\\{}", mobi_file_name));
 
-    assert!(&mobi_file_path.is_file(), "mobi has not been created");
+    assert!(&mobi_file_path.is_file());
+
+    clean_up(images, epub_file_path);
 
     mobi_file_path
 }

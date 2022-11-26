@@ -2,11 +2,13 @@ mod manga_structs;
 mod make_mobi;
 mod common;
 
+pub use common::Outputfile;
+
 use self::common::get_json;
 use self::manga_structs::{MangaChapter, MangaSeries, MangaVolume};
 
 /// Get the manga by id and return a `MangaSeries`
-pub fn get_by_id(manga_id: &str) -> MangaSeries {
+pub fn get_manga_by_id(manga_id: &str) -> MangaSeries {
     let manga_details_data = get_json(format!("https://api.mangadex.org/manga/{}", manga_id));
 
     let manga_title = manga_details_data["data"]["attributes"]["title"]["en"].to_string().replace("\"", "");
