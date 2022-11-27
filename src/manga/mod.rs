@@ -1,54 +1,63 @@
-mod manga_structs;
-mod make_mobi;
 mod common;
+mod make_mobi;
+mod manga_structs;
 
 pub use common::Outputfile;
 
 use self::common::get_json;
-use self::manga_structs::{MangaChapter, MangaSeries, MangaVolume};
+use self::manga_structs::{MangaChapter, MangaSeries, MangaVolume, VolumeCoverImage};
 
 /// Get the manga by id and return a `MangaSeries`
 pub fn get_manga_by_id(manga_id: &str) -> MangaSeries {
     let manga_details_data = get_json(format!("https://api.mangadex.org/manga/{}", manga_id));
 
-    let manga_title = manga_details_data["data"]["attributes"]["title"]["en"].to_string().replace("\"", "");
+    let manga_title = manga_details_data["data"]["attributes"]["title"]["en"]
+        .to_string()
+        .replace('"', "");
 
-    let manga_description =
-        manga_details_data["data"]["attributes"]["description"]["en"].to_string().replace("\"", "");
+    let manga_description = manga_details_data["data"]["attributes"]["description"]["en"]
+        .to_string()
+        .replace('"', "");
 
-    let manga_demographic =
-        manga_details_data["data"]["attributes"]["publicationDemographic"].to_string().replace("\"", "");
+    let manga_demographic = manga_details_data["data"]["attributes"]["publicationDemographic"]
+        .to_string()
+        .replace('"', "");
 
-    let manga_status = manga_details_data["data"]["attributes"]["status"].to_string().replace("\"", "");
+    let manga_status = manga_details_data["data"]["attributes"]["status"]
+        .to_string()
+        .replace('"', "");
 
-    let manga_year = manga_details_data["data"]["attributes"]["year"].to_string().replace("\"", "");
+    let manga_year = manga_details_data["data"]["attributes"]["year"]
+        .to_string()
+        .replace('"', "");
 
     let manga_tags: Vec<String> = manga_details_data["data"]["attributes"]["tags"]
         .as_array()
         .unwrap()
         .iter()
-        .map(|tag| tag["attributes"]["name"]["en"].to_string().replace("\"", ""))
+        .map(|tag| {
+            tag["attributes"]["name"]["en"]
+                .to_string()
+                .replace('\"', "")
+        })
         .collect();
 
     let mut manga_cover_url = String::new();
-    for internal_relationship in manga_details_data["data"]["relationships"]
+    for relationship_data in manga_details_data["data"]["relationships"]
         .as_array()
-        .iter()
+        .unwrap()
     {
-        for relationship_data in internal_relationship.iter() {
-            if relationship_data["type"].eq("cover_art") {
-                let manga_cover_data = get_json(format!(
-                    "https://api.mangadex.org/cover/{}",
-                    relationship_data["id"].to_string().replace("\"", "")
-                ));
+        if relationship_data["type"].eq("cover_art") {
+            let manga_cover_data = get_json(format!(
+                "https://api.mangadex.org/cover/{}",
+                relationship_data["id"].to_string().replace('"', "")
+            ));
 
-                manga_cover_url = format!(
-                    "https://uploads.mangadex.org/covers/{}/{}",
-                    &manga_id,
-                    manga_cover_data["data"]["attributes"]["fileName"].to_string()
-                )
-                .replace("\"", "");
-            }
+            manga_cover_url = format!(
+                "https://uploads.mangadex.org/covers/{}/{}",
+                &manga_id, manga_cover_data["data"]["attributes"]["fileName"]
+            )
+            .replace('"', "");
         }
     }
 
@@ -90,10 +99,10 @@ pub fn get_manga_by_id(manga_id: &str) -> MangaSeries {
             {
                 if internal_chapter_title.eq(&chapter_title) {
                     chapters.push(MangaChapter {
-                        id: chapter_data["id"].to_string().replace("\"", ""),
-                        title: chapter_data["chapter"].to_string().replace("\"", ""),
+                        id: chapter_data["id"].to_string().replace('"', ""),
+                        title: chapter_data["chapter"].to_string().replace('"', ""),
                         volume_title: volume_title.to_owned(),
-                        manga_title: manga_title.to_owned().replace("\"", ""),
+                        manga_title: manga_title.to_owned().replace('"', ""),
                     })
                 }
             }
@@ -107,26 +116,31 @@ pub fn get_manga_by_id(manga_id: &str) -> MangaSeries {
         };
 
         let mut volume_cover_url = String::new();
-        for cover in all_manga_volume_covers["data"].as_array() {
+        let mut volume_cover_url_type: VolumeCoverImage = VolumeCoverImage::Found(String::new());
+        for cover in all_manga_volume_covers["data"].as_array().unwrap() {
             if cover[0]["attributes"]["volume"].eq(volume_title) {
-                let hash_cover_filename = cover[0]["attributes"]["fileName"].to_string().replace("\"", "");
+                let hash_cover_filename = cover[0]["attributes"]["fileName"]
+                    .to_string()
+                    .replace('"', "");
 
                 volume_cover_url = format!(
                     "https://mangadex.org/covers/{}/{}",
                     manga_id, hash_cover_filename
                 );
+                volume_cover_url_type = VolumeCoverImage::Found(volume_cover_url.to_owned());
             }
 
             if volume_cover_url.eq(&String::new()) {
                 volume_cover_url = manga_cover_url.to_owned();
+                volume_cover_url_type = VolumeCoverImage::NotFound(volume_cover_url.to_owned());
             }
         }
 
         manga_volumes.push(MangaVolume {
-            title: internal_volume_title.to_owned().replace("\"", ""),
-            manga_title: manga_title.to_owned().replace("\"", ""),
-            cover_url: volume_cover_url,
-            chapters: chapters,
+            title: internal_volume_title.to_owned().replace('"', ""),
+            manga_title: manga_title.to_owned().replace('"', ""),
+            cover_url: volume_cover_url_type,
+            chapters,
         });
     }
 

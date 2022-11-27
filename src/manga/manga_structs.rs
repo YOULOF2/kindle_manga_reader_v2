@@ -1,5 +1,8 @@
 use crate::manga::common::{get_json, Outputfile};
 use crate::manga::make_mobi;
+use crate::assets::image_paths;
+
+use image::{imageops, DynamicImage};
 use std::fs;
 use std::fs::File;
 use std::path::PathBuf;
@@ -26,7 +29,7 @@ pub struct MangaSeries {
 pub struct MangaVolume {
     pub title: String,
     pub manga_title: String,
-    pub cover_url: String,
+    pub cover_url: VolumeCoverImage,
     pub chapters: Vec<MangaChapter>,
 }
 
@@ -46,21 +49,45 @@ impl MangaVolume {
     }
 
     fn download_cover(&self) -> PathBuf {
-        let cover_file_name = self.cover_url.split("/").last().unwrap();
-        println!("{:?}", cover_file_name);
+        fn internal_download_cover(cover_url: String) -> PathBuf {
+            let cover_file_name = cover_url.split('/').last().unwrap();
+            println!("{:?}", cover_file_name);
 
-        let file_path = PathBuf::from(format!("temp\\{}", cover_file_name));
+            let file_path = PathBuf::from(format!("temp\\{}", cover_file_name));
 
-        let mut file = File::create(&file_path).unwrap();
+            let mut file = File::create(&file_path).unwrap();
 
-        reqwest::blocking::get(&self.cover_url)
-            .unwrap()
-            .copy_to(&mut file)
-            .unwrap();
+            reqwest::blocking::get(&cover_url)
+                .unwrap()
+                .copy_to(&mut file)
+                .unwrap();
 
-        resize_image_to_a4(&file_path);
+            resize_image_to_a4(&file_path);
 
-        fs::canonicalize(&file_path).unwrap()
+            fs::canonicalize(&file_path).unwrap()
+        }
+
+        fn add_overlay(
+            mut base: DynamicImage,
+            overlay_image: DynamicImage,
+            output_path: PathBuf,
+        ) -> PathBuf {
+            imageops::overlay(&mut base, &overlay_image, 0, 0);
+            base.save(&output_path).unwrap();
+            output_path
+        }
+
+        match &self.cover_url {
+            VolumeCoverImage::Found(image_url) => internal_download_cover(image_url.to_string()),
+            VolumeCoverImage::NotFound(image_url) => {
+                let image_path = internal_download_cover(image_url.to_string());
+                add_overlay(
+                    image::open(&image_path).unwrap(),
+                    image::open(image_paths::VOLUME_COVER_NOT_FOUND).unwrap(),
+                    image_path,
+                )
+            }
+        }
     }
 
     pub fn to_mobi(&self) -> Outputfile {
@@ -73,7 +100,7 @@ impl MangaVolume {
 
         let mut images = self.download_images();
 
-        images.push(fs::canonicalize(PathBuf::from("assets\\endofthisvolume.png")).unwrap());
+        images.push(fs::canonicalize(PathBuf::from(image_paths::END_OF_VOLUME)).unwrap());
 
         let mobi_file = make_mobi::make_volume(
             &images,
@@ -123,7 +150,7 @@ impl MangaChapter {
         for image in chapter_data["chapter"]["dataSaver"]
             .as_array()
             .unwrap()
-            .to_owned()
+            .clone()
         {
             // 👇 to stop the borrow checker from complaining
             let local_base_url = base_url.clone();
@@ -179,7 +206,7 @@ impl MangaChapter {
 
         let mut images = self.download_images();
 
-        images.push(fs::canonicalize(PathBuf::from("assets\\endofthischapter.png")).unwrap());
+        images.push(fs::canonicalize(PathBuf::from(image_paths::END_OF_CHAPTER)).unwrap());
 
         let mobi_file = make_mobi::make_chapter(
             &images,
@@ -214,7 +241,7 @@ use image::{io::Reader as ImageReader, ColorType, ImageEncoder};
 
 use std::time::Instant;
 
-pub fn resize_image_to_a4(image_path: &PathBuf) -> () {
+pub fn resize_image_to_a4(image_path: &PathBuf) {
     let now = Instant::now();
     let opened_image = ImageReader::open(image_path).unwrap().decode().unwrap();
 
@@ -269,4 +296,11 @@ pub fn resize_image_to_a4(image_path: &PathBuf) -> () {
 
     let elapsed = now.elapsed();
     println!("time to resize image is: {:.2?}", elapsed.as_secs());
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+#[derive(Debug)]
+pub enum VolumeCoverImage {
+    Found(String),
+    NotFound(String),
 }

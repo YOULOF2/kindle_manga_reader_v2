@@ -65,9 +65,15 @@ impl OnDeviceFiles {
 
 pub struct Mount {
     sys: System,
-    point: PathBuf,
+    mount_point: PathBuf,
     available_space: u64,
     kindle_found: bool,
+}
+
+impl Default for Mount {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 // Private
@@ -75,7 +81,7 @@ impl Mount {
     fn create_kmr2_file(&self) {
         let serialized = serde_json::to_string(&OnDeviceFiles::new()).unwrap();
 
-        let kmr_data_file_path = Path::new(&self.point).join("data.kmr2");
+        let kmr_data_file_path = Path::new(&self.mount_point).join("data.kmr2");
 
         let mut kmr_data_file = fs::File::create(&kmr_data_file_path).unwrap();
 
@@ -83,7 +89,7 @@ impl Mount {
     }
 
     fn add_to_kmr2_file(&self, output_file: &Outputfile) {
-        let kmr_data_file_path = Path::new(&self.point).join("data.kmr2");
+        let kmr_data_file_path = Path::new(&self.mount_point).join("data.kmr2");
 
         let serialized = read_to_string(&kmr_data_file_path).unwrap();
 
@@ -114,7 +120,7 @@ impl Mount {
             .files
             .iter()
             .position(|x| x.file_name.eq(&file_data.file_name));
-        if let None = duplicate_index {
+        if duplicate_index.is_none() {
             data.files.push(file_data);
 
             let serialized = serde_json::to_string(&data).unwrap();
@@ -124,7 +130,7 @@ impl Mount {
     }
 
     fn does_kmr2_exist(&self) -> bool {
-        Path::new(&self.point).join("data.kmr2").exists()
+        Path::new(&self.mount_point).join("data.kmr2").exists()
     }
 }
 
@@ -137,10 +143,10 @@ impl Mount {
         let sys = System::new_all();
 
         Mount {
-            sys: sys,
-            point: mount_point,
-            available_space: available_space,
-            kindle_found: kindle_found,
+            sys,
+            mount_point,
+            available_space,
+            kindle_found,
         }
     }
 
@@ -149,12 +155,12 @@ impl Mount {
 
         for disk in self.sys.disks() {
             if disk.name() == "Kindle" {
-                self.point = disk.mount_point().to_owned();
+                self.mount_point = disk.mount_point().to_owned();
                 self.available_space = disk.available_space();
                 self.kindle_found = true;
                 break;
             } else {
-                self.point = PathBuf::new();
+                self.mount_point = PathBuf::new();
                 self.available_space = 0;
                 self.kindle_found = false;
             }
@@ -175,9 +181,9 @@ impl Mount {
 
         self.add_to_kmr2_file(&output_file);
 
-        let documents_path = Path::new(&self.point)
+        let documents_path = Path::new(&self.mount_point)
             .join("documents")
-            .join(&output_file.path.file_name().unwrap());
+            .join(output_file.path.file_name().unwrap());
 
         
 

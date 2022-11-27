@@ -1,7 +1,9 @@
 use std::{process::Command, path::PathBuf};
 
+use crate::assets::KINDLEGEN_PATH;
+
 pub fn convert(epub_path: &PathBuf, mobi_path: &String) {
-    Command::new("src\\manga\\make_mobi\\kindlegen.exe")
+    Command::new(KINDLEGEN_PATH)
         .arg(epub_path)
         .arg("-c0")
         .arg("-o")

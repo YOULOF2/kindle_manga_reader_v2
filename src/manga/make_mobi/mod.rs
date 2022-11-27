@@ -11,6 +11,8 @@ use handlebars::Handlebars;
 use image::GenericImageView;
 use serde_json::json;
 
+use crate::assets::templates;
+
 // ─── Functions ───────────────────────────────────────────────────────────────
 
 pub fn get_extension_from_filename(filename: &PathBuf) -> Option<&str> {
@@ -23,7 +25,7 @@ fn read_as_bytes(file: &PathBuf) -> Vec<u8> {
 
 fn render_template(html_data: &str, data: serde_json::Value) -> String {
     let reg = Handlebars::new();
-    reg.render_template(&html_data, &data).unwrap()
+    reg.render_template(html_data, &data).unwrap()
 }
 
 // ─── Make Epub ───────────────────────────────────────────────────────────────
@@ -34,7 +36,7 @@ fn make_epub(
     epub_file_path: &PathBuf,
     author: &String,
     epub_title: &String,
-) -> () {
+) {
     let css = r#"@charset "utf-8";a {text-decoration: none;}#toc ol {list-style-type: none;}img {display: block;width: 100%;object-fit: contain;}"#;
 
     let all_images = images.to_owned();
@@ -73,7 +75,7 @@ fn make_epub(
 
     // render the fields in cover.html
     let binding = render_template(
-        include_str!("./templates/cover.html"),
+        templates::COVER_HTML,
         json!({"width": im_width, "height": im_height, "cover_path": format!("image-0.{}", file_extension)}),
     );
 
@@ -115,7 +117,7 @@ fn make_epub(
 
         // render template html to string
         let binding = render_template(
-            include_str!("./templates/page.html"),
+            templates::PAGE_HTML,
             json!({"width": im_width, "height": im_height, "image": format!("image-{}.{}",index + 1, file_extension)}),
         );
 
@@ -141,11 +143,11 @@ fn make_epub(
 
     epub.inline_toc();
 
-    let file = fs::File::create(&epub_file_path).unwrap();
+    let file = fs::File::create(epub_file_path).unwrap();
     epub.generate(file).unwrap();
 }
 
-fn clean_up(images: &Vec<PathBuf>, epub_file_path: PathBuf) {
+fn clean_up(images: &[PathBuf], epub_file_path: PathBuf) {
     // Remove all images
     for image in images.iter() {
         if !image
@@ -162,7 +164,9 @@ fn clean_up(images: &Vec<PathBuf>, epub_file_path: PathBuf) {
                 .eq("endofthischapter.png")
         {
             println!("removing image: {:?}", image);
-            fs::remove_file(image).unwrap();
+            if fs::remove_file(image).is_err() {
+                break;
+            }
         }
     }
 
@@ -185,11 +189,11 @@ pub fn make_chapter(
     );
 
     // Make epub path legal
-    ebook_title = ebook_title.replace(":", " ");
+    ebook_title = ebook_title.replace(':', " ");
 
     let epub_file_path = PathBuf::from(format!("temp\\{}.epub", &ebook_title));
 
-    make_epub(images, &epub_file_path, &author, &ebook_title);
+    make_epub(images, &epub_file_path, author, &ebook_title);
 
     let mobi_file_name = format!(
         "{} volume {} chapter {}.mobi",
@@ -216,11 +220,11 @@ pub fn make_volume(
     let mut ebook_title = format!("{} volume {}", manga_title, volume_title);
 
     // Make epub path legal
-    ebook_title = ebook_title.replace(":", " ");
+    ebook_title = ebook_title.replace(':', " ");
 
     let epub_file_path = PathBuf::from(format!("temp\\{}.epub", &ebook_title));
 
-    make_epub(images, &epub_file_path, &author, &ebook_title);
+    make_epub(images, &epub_file_path, author, &ebook_title);
 
     let mobi_file_name = format!("{}.mobi", ebook_title);
 
