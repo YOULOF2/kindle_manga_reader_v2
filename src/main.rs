@@ -76,10 +76,6 @@ fn main() {
         display_get_manga_id(siv);
     });
 
-    // ─── Set Fps ─────────────────────────────────────────────────────────
-
-    siv.set_fps(1);
-
     // ─── Display Content ─────────────────────────────────────────────────
 
     display_get_manga_id(&mut siv);
@@ -835,7 +831,7 @@ fn display_get_manga_id(siv: &mut Cursive) {
             Dialog::around(
                 LinearLayout::vertical()
                     .child(DummyView)
-                    .child(TextView::new("(っ ͡• ‿‿ ͡•)っ🎔").align_bottom_center())
+                    .child(TextView::new("Hello").align_bottom_center())
                     .child(DummyView)
                     .child(
                         EditView::new()
