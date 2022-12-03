@@ -1,7 +1,8 @@
+use crate::assets::image_paths;
 use crate::manga::common::{get_json, Outputfile};
 use crate::manga::make_mobi;
-use crate::assets::image_paths;
 
+use cursive::utils::Counter;
 use image::{imageops, DynamicImage};
 use std::fs;
 use std::fs::File;
@@ -10,7 +11,7 @@ use std::thread;
 
 // ─── Mangaseries ─────────────────────────────────────────────────────────────
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MangaSeries {
     pub id: String,
     pub title: String,
@@ -25,7 +26,7 @@ pub struct MangaSeries {
 
 // ─── Mangavolume ─────────────────────────────────────────────────────────────
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MangaVolume {
     pub title: String,
     pub manga_title: String,
@@ -51,7 +52,6 @@ impl MangaVolume {
     fn download_cover(&self) -> PathBuf {
         fn internal_download_cover(cover_url: String) -> PathBuf {
             let cover_file_name = cover_url.split('/').last().unwrap();
-            println!("{:?}", cover_file_name);
 
             let file_path = PathBuf::from(format!("temp\\{}", cover_file_name));
 
@@ -90,7 +90,7 @@ impl MangaVolume {
         }
     }
 
-    pub fn to_mobi(&self) -> Outputfile {
+    pub fn to_mobi(&self, counter: &Counter) -> Outputfile {
         //! 1. Downloads the volume images
         //! 2. Adds the end of volume image
         //! 3. Converts it to mobi
@@ -98,9 +98,15 @@ impl MangaVolume {
         //! Returns `Outputfile` with `path` (mobi path) and `size` (mobi file size),
         //!  `manga_title` (manga title), `volume_title` (volume title) and `chapter_title` as None
 
+        counter.tick(1);
+
         let mut images = self.download_images();
 
+        counter.tick(1);
+
         images.push(fs::canonicalize(PathBuf::from(image_paths::END_OF_VOLUME)).unwrap());
+
+        counter.tick(1);
 
         let mobi_file = make_mobi::make_volume(
             &images,
@@ -109,9 +115,11 @@ impl MangaVolume {
             &String::from("KindleMangaReader"),
         );
 
-        println!("{:?}", mobi_file);
+        counter.tick(1);
 
         let mobi_size = mobi_file.metadata().unwrap().len().to_owned();
+
+        counter.tick(1);
 
         Outputfile {
             content_type: String::from("volume"),
@@ -126,7 +134,7 @@ impl MangaVolume {
 
 // ─── Mangachapter ────────────────────────────────────────────────────────────
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MangaChapter {
     pub id: String,
     pub title: String,
@@ -176,11 +184,11 @@ impl MangaChapter {
                     .copy_to(&mut file)
                     .unwrap();
 
-                let cannon_file_path = fs::canonicalize(file_path).unwrap();
+                let canonicalize_file_path = fs::canonicalize(file_path).unwrap();
 
-                resize_image_to_a4(&cannon_file_path);
+                resize_image_to_a4(&canonicalize_file_path);
 
-                cannon_file_path
+                canonicalize_file_path
             });
 
             join_handles.push(join_handle);
@@ -196,7 +204,7 @@ impl MangaChapter {
         image_file_paths
     }
 
-    pub fn to_mobi(&self) -> Outputfile {
+    pub fn to_mobi(&self, counter: &Counter) -> Outputfile {
         //! 1. Downloads the chapter images
         //! 2. Adds the end of chapter image
         //! 3. Converts it to mobi
@@ -204,9 +212,15 @@ impl MangaChapter {
         //! Returns `Outputfile` with `path` (mobi path) and `size` (mobi file size),
         //!  `manga_title` (manga title), `volume_title` (volume title) and `chapter_title` (chapter title)
 
+        counter.tick(1);
+
         let mut images = self.download_images();
 
+        counter.tick(1);
+
         images.push(fs::canonicalize(PathBuf::from(image_paths::END_OF_CHAPTER)).unwrap());
+
+        counter.tick(1);
 
         let mobi_file = make_mobi::make_chapter(
             &images,
@@ -216,7 +230,11 @@ impl MangaChapter {
             &String::from("KindleMangaReader"),
         );
 
+        counter.tick(1);
+
         let mobi_size = mobi_file.metadata().unwrap().len().to_owned();
+
+        counter.tick(1);
 
         Outputfile {
             content_type: String::from("chapter"),
@@ -239,10 +257,7 @@ use fast_image_resize as fr;
 use image::codecs::png::PngEncoder;
 use image::{io::Reader as ImageReader, ColorType, ImageEncoder};
 
-use std::time::Instant;
-
 pub fn resize_image_to_a4(image_path: &PathBuf) {
-    let now = Instant::now();
     let opened_image = ImageReader::open(image_path).unwrap().decode().unwrap();
 
     let width = NonZeroU32::new(opened_image.width()).unwrap();
@@ -293,13 +308,10 @@ pub fn resize_image_to_a4(image_path: &PathBuf) {
             ColorType::Rgba8,
         )
         .unwrap();
-
-    let elapsed = now.elapsed();
-    println!("time to resize image is: {:.2?}", elapsed.as_secs());
 }
 
 // ─── Enums ───────────────────────────────────────────────────────────────────
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum VolumeCoverImage {
     Found(String),
     NotFound(String),

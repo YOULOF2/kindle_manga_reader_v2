@@ -1,6 +1,6 @@
+pub mod ascrii_art;
+pub mod assets;
+pub mod cart;
 pub mod kindle;
-
-mod manga;
-mod assets;
-
-pub use manga::get_manga_by_id;
+pub mod manga;
+pub mod que;

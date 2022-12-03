@@ -162,17 +162,14 @@ fn clean_up(images: &[PathBuf], epub_file_path: PathBuf) {
                 .to_str()
                 .unwrap()
                 .eq("endofthischapter.png")
+            && fs::remove_file(image).is_err()
         {
-            println!("removing image: {:?}", image);
-            if fs::remove_file(image).is_err() {
-                break;
-            }
+            break;
         }
     }
 
     // Remove epub
     fs::remove_file(epub_file_path).unwrap();
-    println!("Removed epub");
 }
 // ─── Public Methods ──────────────────────────────────────────────────────────
 
@@ -195,10 +192,7 @@ pub fn make_chapter(
 
     make_epub(images, &epub_file_path, author, &ebook_title);
 
-    let mobi_file_name = format!(
-        "{} volume {} chapter {}.mobi",
-        manga_title, volume_title, chapter_title
-    );
+    let mobi_file_name = format!("{}.mobi", ebook_title);
 
     epub_to_mobi::convert(&epub_file_path, &mobi_file_name);
 

@@ -1,0 +1,40 @@
+
+*************************************************************
+ Amazon kindlegen(Windows) V2.9 build 1029-0897292 
+ A command line e-book compiler 
+ Copyright Amazon.com and its Affiliates 2014 
+*************************************************************
+
+Info:I9005:option: -c0: No compression
+Info(prcgen):I1047: Added metadata dc:Title        "Sono Bisque Doll wa Koi wo Suru volume 3 chapter 18"
+Info(prcgen):I1047: Added metadata dc:Date         "2022-12-03T08:56:00Z"
+Info(prcgen):I1047: Added metadata dc:Creator      "KindleMangaReader"
+Info(prcgen):I1047: Added metadata fixed-layout    "true"
+Info(prcgen):I1047: Added metadata orientation-lock "portrait"
+Info(prcgen):I1002: Parsing files  0000024
+Info(cssparser):I10004: @rules other than @import, @charset and @font-face are not supported.
+Info(prcgen):I1015: Building PRC file
+Info(prcgen):I1006: Resolving hyperlinks
+Info(prcgen):I1008: Resolving start reading location
+Info(prcgen):I1049: Building table of content     URL: C:\Users\Asus\AppData\Local\Temp\mbp_7E6_C_3_A_38_0_76_3C90_E3C_1\OEBPS\toc.ncx
+Info(pagemap):I8000: No Page map found in the book
+Info(prcgen):I1045: Computing UNICODE ranges used in the book
+Info(prcgen):I1046: Found UNICODE range: Basic Latin [20..7E]
+Info(prcgen):I1017: Building PRC file, record count:   0000003
+Info(prcgen):I1039: Final stats - text compressed to (in % of original size):  100.00%
+Info(prcgen):I1040: The document identifier is: "Sono_Bisque_-e_3_chapter_18"
+Info(prcgen):I1041: The file format version is V6
+Info(prcgen):I1031: Saving PRC file
+Info(prcgen):I1032: PRC built successfully
+Info(prcgen):I1016: Building enhanced PRC file
+Info(prcgen):I1007: Resolving mediaidlinks
+Info(prcgen):I1011: Writing mediaidlinks
+Info(prcgen):I1009: Resolving guide items
+Warning(prcgen):W14023: Failed to add the guide item to the book :  text
+Warning(prcgen):W14023: Failed to add the guide item to the book :  toc
+Info(prcgen):I1017: Building PRC file, record count:   0000008
+Info(prcgen):I1041: The file format version is V8
+Info(prcgen):I1033: PRC built with WARNINGS!
+Info(prcgen):I15000:  Approximate Standard Mobi Deliverable file size :   0002329KB
+Info(prcgen):I15001:  Approximate KF8 Deliverable file size :   0002353KB
+Info(prcgen):I1037: Mobi file built with WARNINGS!

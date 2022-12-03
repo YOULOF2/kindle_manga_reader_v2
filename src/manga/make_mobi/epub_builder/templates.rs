@@ -10,8 +10,7 @@ pub static IBOOKS: &[u8] = templates::IBOOKS_XML;
 pub static CONTAINER: &[u8] = templates::CONTAINER_XML;
 
 pub static TOC_NCX: Lazy<::mustache::Template> = Lazy::new(|| {
-    ::mustache::compile_str(templates::TOC_NCX)
-        .expect("error compiling 'toc.ncx' template'")
+    ::mustache::compile_str(templates::TOC_NCX).expect("error compiling 'toc.ncx' template'")
 });
 
 pub mod v2 {

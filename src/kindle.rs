@@ -12,6 +12,7 @@ use serde_json;
 use sysinfo::{DiskExt, System, SystemExt};
 
 use crate::manga::Outputfile;
+use crate::que;
 // ─── Errors ──────────────────────────────────────────────────────────────────
 
 #[derive(Debug)]
@@ -27,13 +28,14 @@ impl fmt::Display for KindleNotFoundError {
 
 // ─── Serde Structs ───────────────────────────────────────────────────────────
 
-#[derive(Serialize, Deserialize)]
-struct OnDeviceFile {
-    r#type: String,
-    manga_title: String,
-    volume_title: String,
-    chapter_title: Option<String>,
-    file_name: String,
+#[derive(Serialize, Deserialize, Clone)]
+pub struct OnDeviceFile {
+    pub r#type: String,
+    pub manga_title: String,
+    pub volume_title: String,
+    pub chapter_title: Option<String>,
+    pub file_name: String,
+    pub file_size: u64,
 }
 
 impl OnDeviceFile {
@@ -44,7 +46,14 @@ impl OnDeviceFile {
             volume_title: String::new(),
             chapter_title: Some(String::new()),
             file_name: String::new(),
+            file_size: 0,
         }
+    }
+}
+
+impl Default for OnDeviceFile {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -66,8 +75,8 @@ impl OnDeviceFiles {
 pub struct Mount {
     sys: System,
     mount_point: PathBuf,
-    available_space: u64,
-    kindle_found: bool,
+    pub is_connected: bool,
+    pub available_space: u64,
 }
 
 impl Default for Mount {
@@ -81,7 +90,7 @@ impl Mount {
     fn create_kmr2_file(&self) {
         let serialized = serde_json::to_string(&OnDeviceFiles::new()).unwrap();
 
-        let kmr_data_file_path = Path::new(&self.mount_point).join("data.kmr2");
+        let kmr_data_file_path = Path::new(&self.mount_point).join("kmr2.json");
 
         let mut kmr_data_file = fs::File::create(&kmr_data_file_path).unwrap();
 
@@ -89,7 +98,7 @@ impl Mount {
     }
 
     fn add_to_kmr2_file(&self, output_file: &Outputfile) {
-        let kmr_data_file_path = Path::new(&self.mount_point).join("data.kmr2");
+        let kmr_data_file_path = Path::new(&self.mount_point).join("kmr2.json");
 
         let serialized = read_to_string(&kmr_data_file_path).unwrap();
 
@@ -113,6 +122,7 @@ impl Mount {
                 .to_str()
                 .unwrap()
                 .to_string(),
+            file_size: output_file.size,
         };
 
         // check if the data is already on the kindle, and if there are no duplicates, add the file data
@@ -129,8 +139,29 @@ impl Mount {
         }
     }
 
+    fn remove_from_kmr2_file(&self, file: &OnDeviceFile) {
+        let kmr_data_file_path = Path::new(&self.mount_point).join("kmr2.json");
+
+        let serialized = read_to_string(&kmr_data_file_path).unwrap();
+
+        let mut data: OnDeviceFiles = serde_json::from_str(&serialized).unwrap();
+
+        // Remove OnDevice file from data
+        let item_index = data
+            .files
+            .iter()
+            .position(|x| x.file_name.eq(&file.file_name));
+        if let Some(index) = item_index {
+            data.files.remove(index);
+        }
+
+        let serialized = serde_json::to_string(&data).unwrap();
+
+        fs::write(kmr_data_file_path, serialized).unwrap();
+    }
+
     fn does_kmr2_exist(&self) -> bool {
-        Path::new(&self.mount_point).join("data.kmr2").exists()
+        Path::new(&self.mount_point).join("kmr2.json").exists()
     }
 }
 
@@ -146,7 +177,7 @@ impl Mount {
             sys,
             mount_point,
             available_space,
-            kindle_found,
+            is_connected: kindle_found,
         }
     }
 
@@ -157,21 +188,21 @@ impl Mount {
             if disk.name() == "Kindle" {
                 self.mount_point = disk.mount_point().to_owned();
                 self.available_space = disk.available_space();
-                self.kindle_found = true;
+                self.is_connected = true;
                 break;
             } else {
                 self.mount_point = PathBuf::new();
                 self.available_space = 0;
-                self.kindle_found = false;
+                self.is_connected = false;
             }
         }
 
-        self.kindle_found
+        self.is_connected
     }
 
     // , output_file: Outputfile
-    pub fn send_to_kindle(&self, output_file: Outputfile) -> Result<(), KindleNotFoundError>{
-        if !self.kindle_found {
+    pub fn send_to_kindle(&self, output_file: &Outputfile) -> Result<(), KindleNotFoundError> {
+        if !self.is_connected {
             return Err(KindleNotFoundError);
         }
 
@@ -179,16 +210,48 @@ impl Mount {
             self.create_kmr2_file();
         }
 
-        self.add_to_kmr2_file(&output_file);
+        // check if there is available space on the kindle
+        if (self.available_space + 100) > output_file.size {
+            self.add_to_kmr2_file(output_file);
 
-        let documents_path = Path::new(&self.mount_point)
-            .join("documents")
-            .join(output_file.path.file_name().unwrap());
+            let documents_path = Path::new(&self.mount_point)
+                .join("documents")
+                .join(output_file.path.file_name().unwrap());
 
-        
-
-        fs::copy(output_file.path, documents_path).unwrap();
+            fs::copy(&output_file.path, documents_path).unwrap();
+        } else {
+            que::add(output_file);
+        }
 
         Ok(())
+    }
+
+    pub fn on_device_manga(&self) -> Result<Vec<OnDeviceFile>, KindleNotFoundError> {
+        if !self.is_connected {
+            return Err(KindleNotFoundError);
+        }
+
+        if !self.does_kmr2_exist() {
+            self.create_kmr2_file();
+        }
+
+        let kmr_data_file_path = Path::new(&self.mount_point).join("kmr2.json");
+
+        let serialized = read_to_string(&kmr_data_file_path).unwrap();
+
+        let data: OnDeviceFiles = serde_json::from_str(&serialized).unwrap();
+
+        Ok(data.files)
+    }
+
+    pub fn remove_manga(&self, file: &OnDeviceFile) {
+        self.remove_from_kmr2_file(file);
+
+        fs::remove_file(
+            Path::new(&self.mount_point)
+                .join("documents")
+                .join(file.file_name.clone()),
+        )
+        .unwrap();
     }
 }

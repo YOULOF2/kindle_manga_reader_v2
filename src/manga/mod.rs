@@ -2,14 +2,40 @@ mod common;
 mod make_mobi;
 mod manga_structs;
 
+pub use self::manga_structs::MangaSeries;
 pub use common::Outputfile;
 
 use self::common::get_json;
-use self::manga_structs::{MangaChapter, MangaSeries, MangaVolume, VolumeCoverImage};
+use self::manga_structs::{MangaChapter, MangaVolume, VolumeCoverImage};
+
+use std::{error::Error, fmt};
+
+#[derive(Debug)]
+pub struct MangaNotFound;
+
+impl Error for MangaNotFound {}
+
+impl fmt::Display for MangaNotFound {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Manga is not found")
+    }
+}
 
 /// Get the manga by id and return a `MangaSeries`
-pub fn get_manga_by_id(manga_id: &str) -> MangaSeries {
+pub fn get_manga_by_id(manga_id: &str) -> Result<MangaSeries, MangaNotFound> {
+    if manga_id.trim().is_empty() {
+        return Err(MangaNotFound);
+    }
+
     let manga_details_data = get_json(format!("https://api.mangadex.org/manga/{}", manga_id));
+
+    if manga_details_data["result"]
+        .to_string()
+        .replace('"', "")
+        .eq("error")
+    {
+        return Err(MangaNotFound);
+    }
 
     let manga_title = manga_details_data["data"]["attributes"]["title"]["en"]
         .to_string()
@@ -135,7 +161,6 @@ pub fn get_manga_by_id(manga_id: &str) -> MangaSeries {
                 volume_cover_url_type = VolumeCoverImage::NotFound(volume_cover_url.to_owned());
             }
         }
-
         manga_volumes.push(MangaVolume {
             title: internal_volume_title.to_owned().replace('"', ""),
             manga_title: manga_title.to_owned().replace('"', ""),
@@ -144,7 +169,32 @@ pub fn get_manga_by_id(manga_id: &str) -> MangaSeries {
         });
     }
 
-    MangaSeries {
+    // ─── Sort The Volumes ────────────────────────────────────────────────
+
+    let mut sorted_volumes: Vec<MangaVolume> = Vec::new();
+
+    let mut volume_titles_as_floats: Vec<f32> = Vec::new();
+    for volume in manga_volumes.iter() {
+        match volume.title.parse::<f32>() {
+            Ok(item) => volume_titles_as_floats.push(item),
+            Err(_) => {
+                sorted_volumes.push(volume.clone());
+                continue;
+            }
+        }
+    }
+
+    volume_titles_as_floats.sort_by(|a, b| b.partial_cmp(a).unwrap());
+    for volume_title_as_float in volume_titles_as_floats {
+        for volume in manga_volumes.iter() {
+            if volume.title == volume_title_as_float.to_string() {
+                sorted_volumes.insert(0, volume.clone())
+            }
+        }
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
+    Ok(MangaSeries {
         id: manga_id.to_string(),
         title: manga_title,
         description: manga_description,
@@ -153,6 +203,6 @@ pub fn get_manga_by_id(manga_id: &str) -> MangaSeries {
         year: manga_year,
         tags: manga_tags,
         cover_url: manga_cover_url,
-        volumes: manga_volumes,
-    }
+        volumes: sorted_volumes,
+    })
 }
